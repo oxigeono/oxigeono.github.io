@@ -1,0 +1,626 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Electron Security | oxigeono</title>
+<link rel="shortcut icon" href="https://oxigeono.github.io/favicon.ico?v=1741360602447">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://oxigeono.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Electron Security | oxigeono - Atom Feed" href="https://oxigeono.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=8535968591"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', '8535968591');
+</script>
+
+
+    <meta name="description" content="基础概念
+
+Electron 是一个使用 JavaScript、HTML 和 CSS 构建桌面应用程序的框架。通过在其二进制文件中嵌入 Chromium 和 Node.js，Electron 允许你维护一个 JavaScript 代码库，并..." />
+    <meta name="keywords" content="" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://oxigeono.github.io">
+  <img class="avatar" src="https://oxigeono.github.io/images/avatar.png?v=1741360602447" alt="">
+  </a>
+  <h1 class="site-title">
+    oxigeono
+  </h1>
+  <p class="site-description">
+    
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Electron Security
+            </h2>
+            <div class="post-info">
+              <span>
+                2025-01-03
+              </span>
+              <span>
+                15 min read
+              </span>
+              
+            </div>
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h2 id="基础概念">基础概念</h2>
+<blockquote>
+<p>Electron 是一个使用 JavaScript、HTML 和 CSS 构建桌面应用程序的框架。通过在其二进制文件中嵌入 Chromium 和 Node.js，Electron 允许你维护一个 JavaScript 代码库，并创建可在 Windows、macOS 和 Linux 上运行的跨平台应用程序。</p>
+</blockquote>
+<figure data-type="image" tabindex="1"><img src="https://oxigeono.github.io/post-images/image-20250106112315361.png" alt="image-20250106112315361" loading="lazy"></figure>
+<h3 id="主进程">主进程</h3>
+<p>每个 Electron 应用都有一个单一的主进程，作为应用程序的入口。</p>
+<p>主进程在 Nodejs 环境中运行，具有 require 模块和使用所有 Nodejs API 的能力。</p>
+<figure data-type="image" tabindex="2"><img src="https://oxigeono.github.io/post-images/chrome-processes.png" alt="chrome-processes" loading="lazy"></figure>
+<h3 id="渲染进程">渲染进程</h3>
+<p>主进程可以通过 BrowserWindow 创建窗口，生成一个单独的渲染器进程。</p>
+<p>渲染器负责渲染网页内容。运行于渲染器进程中的代码遵循网页标准。</p>
+<h3 id="预加载脚本">预加载脚本</h3>
+<p>主进程可以与操作系统交互，渲染进程只能渲染网页。当功能需要操作系统支持，渲染进程如何将需求传递给主进程，主进程如何将结果传递给渲染进程？</p>
+<p>Electron 设计了一系列的 IPC 功能，方便主进程和渲染进程通信。渲染进程的通信通常在预加载脚本中进行。预加载脚本包含了在网页内容开始加载前就执行于渲染器进程的代码。这些脚本运行与渲染器进程中，却能访问 Nodejs API。为了安全考虑，它的 API 是有限的，主要是发起 IPC 请求或监听，将自定义的 API 和变量传递给渲染进程使用。</p>
+<p>预加载脚本可以在 BrowserWindow 构造方法中的 webPreferences 选项里被附加到主进程。</p>
+<pre><code class="language-js">const { BrowserWindow } = require('electron')
+// ...
+const win = new BrowserWindow({
+  webPreferences: {
+    preload: 'path/preload.js'
+  }
+})
+// ...
+</code></pre>
+<p>关于预加载脚本，后面有更详细的案例。</p>
+<h2 id="electron-应用安全">Electron 应用安全</h2>
+<h3 id="解包-asar-文件">解包 asar 文件</h3>
+<p>Electron 应用会将程序代码打包成 <code>.asar</code> 文件，该文件包含了程序的部分代码。</p>
+<p>以 Follow（MacOS）为例，asar 文件路径为<code>/Applications/Follow.app/Contents/Resources/app.asar</code></p>
+<pre><code class="language-bash">npm install -g @electron/asar
+asar extract app.asar ./
+</code></pre>
+<h3 id="软件供应链安全">软件供应链安全</h3>
+<p>Electron 应用使用的依赖包在 package.json 中</p>
+<pre><code class="language-json">&quot;dependencies&quot;: {
+  &quot;dayjs&quot;: &quot;^1.11.13&quot;,
+  &quot;electron-log&quot;: &quot;^5.2.3&quot;,
+  &quot;electron-updater&quot;: &quot;^6.1.8&quot;,
+  &quot;i18next&quot;: &quot;^23.16.4&quot;,
+  &quot;i18next-electron-fs-backend&quot;: &quot;^3.0.2&quot;,
+  &quot;i18next-fs-backend&quot;: &quot;^2.3.2&quot;,
+  &quot;knex&quot;: &quot;^3.1.0&quot;,
+  &quot;lodash&quot;: &quot;^4.17.21&quot;,
+  &quot;node-machine-id&quot;: &quot;^1.1.12&quot;,
+  &quot;plist&quot;: &quot;^3.1.0&quot;,
+  &quot;zustand&quot;: &quot;^5.0.1&quot;
+},
+</code></pre>
+<p>npm 支持对目录下的 package.json 以及 package-lock.json 自动分析，排查组件漏洞。</p>
+<pre><code class="language-bash">npm i --package-lock-only // 创建 package-lock.json
+npm audit
+</code></pre>
+<h3 id="electron-版本">Electron 版本</h3>
+<p>旧版本的 Electron 和 Chromium 可能存在直接可以利用的漏洞。</p>
+<p>从解包出来的文件中可以初步判断 electron 版本。</p>
+<pre><code class="language-bash">➜  magic-asar grep -rn &quot;electron\&quot;:&quot;
+./node_modules/electron-updater/package.json:33:    &quot;electron&quot;: &quot;^31.2.1&quot;
+./node_modules/electron-log/package.json:29:    &quot;electron&quot;: &quot;*&quot;,
+./node_modules/electron-log/package.json:37:    &quot;vite-plugin-electron&quot;: &quot;^0.15.5&quot;,
+➜  magic-asar
+</code></pre>
+<h3 id="远程调试">远程调试</h3>
+<pre><code class="language-bash">➜  ~ cd /Applications/Magic.app/Contents/MacOS
+➜  MacOS ./Magic --inspect=&quot;0.0.0.0:7777&quot; --watch
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://oxigeono.github.io/post-images/image-20250103110633620-5873597.png" alt="image-20250103110633620" loading="lazy"></figure>
+<p>通过终端命令可以获取准确的 Electron 版本</p>
+<figure data-type="image" tabindex="4"><img src="https://oxigeono.github.io/post-images/image-20250103110837541-5873718.png" alt="image-20250103110837541" loading="lazy"></figure>
+<h3 id="对比版本发布明细">对比版本发布明细</h3>
+<p>https://releases.electronjs.org/release/compare/v32.0.0/v32.2.5</p>
+<p>与最新的稳定版本进行比较，查看旧版本存在的问题。</p>
+<h3 id="重要配置">重要配置</h3>
+<p>通过 package.json 的 main 字段获取程序入口文件，这里是 dist-electron/main/index.js</p>
+<p>可以确认一些重要配置，以便后续的漏洞利用。</p>
+<figure data-type="image" tabindex="5"><img src="https://oxigeono.github.io/post-images/image-20250103111759085.png" alt="image-20250103111759085" loading="lazy"></figure>
+<h3 id="nodeintegration">nodeIntegration</h3>
+<p>从 Electron 5 版本开始默认设置为 false</p>
+<p>这个属性决定渲染器进程是否具备执行 Nodejs 的能力。如果该属性设置为 true，渲染进程出现 XSS 漏洞，能够执行 Javascript 代码，就会导致 RCE 漏洞。<br>
+实际测试中渲染进程想要调用 <code>require('child_process')</code> 还需要 <code>contextIsolation: false</code> 和 sandbox 不显式设置为 true</p>
+<h3 id="contextisolation">contextIsolation</h3>
+<p>从 Electrion 12 版本开始默认设置为 true</p>
+<p>上下文隔离主要是确保预加载脚本与网页（渲染进程）之间的对象隔离。如果在预加载脚本中设置 <code>window.hello = 'ware'</code> 并且启动了上下文隔离，当网页尝试访问 window.hello 对象时将返回 undefined。如果关闭该属性，渲染进程一旦出现 XSS 漏洞，能够执行覆盖 Javascript 代码，配合预加载脚本及主进程定义好的功能，可能导致 RCE 漏洞。</p>
+<p>contextIsolation 本身隔离的效果不受 nodeIntegration、sandbox 的影响，渲染进程获取到预加载脚本的部分方法后，执行效果是受 sandbox 影响的，例如 Electron 6.0 以后，开启 sandbox 即使 Preload 将 require 绑定在了 window 对象中，渲染进程获取到 require 也无法加载 child_process ，当然，Preload 也加载不了。</p>
+<h4 id="漏洞案例">漏洞案例</h4>
+<blockquote>
+<p>https://mksben.l0.cm/2020/10/discord-desktop-rce.html</p>
+</blockquote>
+<p>预加载脚本内部重新封装了 require，禁止使用 child_process 和 shell。之后暴露给渲染进程。在关闭 contextIsolation 的情况下可以绕过限制，执行系统命令。</p>
+<p><strong>main.js</strong></p>
+<pre><code class="language-js">const { app, BrowserWindow } = require('electron')
+const path = require('node:path')
+
+function createWindow () {
+  const mainWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      sandbox: false,
+      contextIsolation: false,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  })
+
+  mainWindow.loadFile('index.html')
+
+}
+
+app.whenReady().then(() =&gt; {
+  createWindow()
+
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', function () {
+  if (process.platform !== 'darwin') app.quit()
+})
+</code></pre>
+<p><strong>preload.js</strong></p>
+<pre><code class="language-js">window.addEventListener('DOMContentLoaded', () =&gt; {
+  const replaceText = (selector, text) =&gt; {
+    const element = document.getElementById(selector)
+    if (element) element.innerText = text
+  }
+
+  for (const type of ['chrome', 'node', 'electron']) {
+    replaceText(`${type}-version`, process.versions[type])
+  }
+})
+
+
+window.diyRequire = (module_name) =&gt; {
+  const forbidden_module = [&quot;child_process&quot;, &quot;shell&quot;]
+  if (forbidden_module.indexOf(module_name) !== -1) {
+    console.log('not allow')
+  } else {
+    return require(module_name)
+  }
+}
+</code></pre>
+<p>防御机制就在  <code>if (forbidden_module.indexOf(module_name) !== -1) </code> 中，由于 contextIsolation 关闭，渲染进程和预加载脚本共用一个上下文，通过原型链污染即可绕过限制，实现 RCE 。</p>
+<figure data-type="image" tabindex="6"><img src="https://oxigeono.github.io/post-images/image-20250106152049698.png" alt="image-20250106152049698" loading="lazy"></figure>
+<h3 id="sandbox">sandbox</h3>
+<p>sandbox 是一项 Chromium 功能，它使用操作系统来显著地限制渲染器进程可以访问的内容，在 Electron 中，限制的方面还要包括 <code>Node.js</code> 能力</p>
+<p>从 Electrion 20 版本开始，默认开启 sandbox，程序会被沙盒保护。但是当 nodeIntegration 、nodeIntegrationInSubFrames、nodeIntegrationInWorker 被设置为 true 时，sandbox 对于 Node.js 的保护效果会失效，除非显式设置 <code>sandbox: true</code>。</p>
+<h3 id="websecurity">webSecurity</h3>
+<p>webSecurity 控制是否开启同源策略，默认开启。</p>
+<p>关闭 webSecurity 可能导致加载其他域的 Javascript 代码。</p>
+<h3 id="fuse">fuse</h3>
+<p>https://www.electronjs.org/zh/docs/latest/tutorial/fuses</p>
+<p>Electron 是为了所有桌面开发者准备的，附带了比较全的功能。但并不是所有开发者都需要这些功能。因此 Electron 提供了关闭部分功能的 fuse。</p>
+<p>这里只记录感觉有用的 fuse。</p>
+<h4 id="runasnode">runAsNode</h4>
+<p>是否遵循 ELECTRON_RUN_AS_NODE环境变量。</p>
+<p><a href="https://www.electronjs.org/zh/docs/latest/api/environment-variables#electron_run_as_node">ELECTRON_RUN_AS_NODE</a>  的含义是把程序当成普通的 Node.js 进程启动。如果是普通的 Node.js，那么应该可以给程序传递很多启动参数。</p>
+<figure data-type="image" tabindex="7"><img src="https://oxigeono.github.io/post-images/image-20250106181826181.png" alt="image-20250106181826181" loading="lazy"></figure>
+<h4 id="nodecliinspect">nodeCliInspect</h4>
+<p>默认值：Enabled</p>
+<p>是否遵循 <code>--inspect --inspect-brk</code> ，实际上该 fuse 决定是否允许远程调试。</p>
+<h4 id="grantfileprotocolextraprivileges">grantFileProtocolExtraPrivileges</h4>
+<p>默认值：Enabled</p>
+<p>这个 fuse 是关于 <code>file://</code> 协议的，在 <code>Electron</code> 中 <code>file://</code> 协议比 web 浏览器中的 <code>file://</code> 协议具备更强大的功能，包括但不限于:</p>
+<ul>
+<li><code>file://</code> 协议加载的页面可以通过 <code>fetch</code> 加载其他<code>file://</code> 协议的资源</li>
+<li><code>file://</code> 协议加载的页面能够使用 <code>service workers</code></li>
+<li><code>file://</code> 协议加载的页面能够访问子 <code>frames</code></li>
+<li><code>file://</code> 无视沙盒限制</li>
+</ul>
+<p>官方推荐，加载本地文件尽可能使用自定义协议，而不是开启这个 fuse ，对于旧版本 <code>Electron</code> ，这是核心功能，所以默认开启。</p>
+<h3 id="预加载脚本-2">预加载脚本</h3>
+<h4 id="未开启-contextisolation-及-sandbox">未开启 contextIsolation 及 sandbox</h4>
+<p>见 contextIsolation 部分</p>
+<h4 id="不安全的实现">不安全的实现</h4>
+<p>开启安全配置后，预加载脚本自己很难造成大问题，除非自身代码存在漏洞，用户又可以利用。</p>
+<p>案例：渲染进程可以读取 docs 目录下的文件，文件名由调用者提供，预加载脚本与主进程通信，读取并返回内容。</p>
+<p><strong>main.js</strong></p>
+<p>ipcMain.handle() 在主进程中设置一个处理程序，它会响应来自渲染进程（renderer.js）的 invoke 请求。这里设置了一个名为 'readFile' 的 IPC 通道，接收文件路径并返回文件内容。</p>
+<pre><code class="language-javascript">const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('fs');
+const path = require('path')
+
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  win.loadFile('./index.html');
+}
+
+app.whenReady().then(() =&gt; {
+  ipcMain.handle('readFile', async (event, filePath) =&gt; {
+    try {
+      filePath = path.join(__dirname, filePath)
+      const data = await fs.promises.readFile(filePath, 'utf-8');
+      return data;
+    } catch (err) {
+      console.error('Error reading file:', err);
+      return null;
+    }
+  });
+  createWindow();
+});
+
+app.on('window-all-closed', () =&gt; {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+</code></pre>
+<p><strong>preload.js</strong></p>
+<p><code>preload.js</code> 用于在渲染进程的环境中注入 Node.js API，确保在渲染进程中有权限访问主进程的功能。通过 <code>contextBridge</code> 来暴露安全的 API，使渲染进程可以调用主进程的功能，但不暴露 Node.js 的底层 API，增加了安全性。</p>
+<pre><code class="language-javascript">const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('customAPI', {
+  readFile: async (fileName) =&gt; {
+    try {
+      const data = await ipcRenderer.invoke('readFile', `docs/${fileName}`);
+      return data;
+    } catch (error) {
+      console.error('Error invoking &quot;readFile&quot;:', error);
+      return null;
+    }
+  },
+});
+</code></pre>
+<p><strong>renderer.js</strong></p>
+<p><code>renderer.js</code> 是 Electron 渲染进程中的 JavaScript 文件，负责应用界面的呈现与交互逻辑，且通过 IPC 与主进程进行通信。</p>
+<pre><code class="language-javascript">const fileNameInput = document.getElementById('fileNameInput');
+const readFileButton = document.getElementById('readFileButton');
+const fileContent = document.getElementById('fileContent');
+
+readFileButton.addEventListener('click', async () =&gt; {
+    const fileName = fileNameInput.value;
+    const data = await window.customAPI.readFile(fileName)
+    fileContent.textContent = data || 'No content'
+});
+</code></pre>
+<p><strong>Index.html</strong></p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;UTF-8&quot;&gt;
+  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+  &lt;title&gt;Electron Path Traversal Vulnerability Demo&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;input type=&quot;text&quot; id=&quot;fileNameInput&quot; placeholder=&quot;Enter file name&quot;&gt;
+  &lt;button id=&quot;readFileButton&quot;&gt;Read File&lt;/button&gt;
+  &lt;pre id=&quot;fileContent&quot;&gt;&lt;/pre&gt;
+  &lt;script src=&quot;./renderer.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>这里没有检查文件名，导致任意文件读取漏洞。<br>
+<img src="https://oxigeono.github.io/post-images/image-20250103151330305.png" alt="image-20250103151330305" loading="lazy"></p>
+<h4 id="接口过度暴露">接口过度暴露</h4>
+<p>在上面的例子中，我们通过预加载脚本使用 contextBridge 将一个文件读取 API 暴露给渲染进程。<br>
+需要暴露的功能多了，开发者可能就会偷懒：如果开发者直接将 ipcRenderer 或 ipcRenderer.invoke 这种 API 或非必要函数直接暴露给渲染进程，可能会导致渲染进程任意发起 IPC 通信，获取敏感信息。</p>
+<p>案例：程序有很多与操作系统命令执行相关的功能，于是开发者写了一个主进程接受参数并执行的通信。</p>
+<p><strong>main.js</strong></p>
+<pre><code class="language-javascript">const { app, BrowserWindow, ipcMain } = require('electron')
+const fs = require('fs')
+const path = require('node:path')
+
+function createWindow () {
+  const mainWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js')
+    }
+  })
+
+  mainWindow.loadFile('index.html')
+}
+
+app.whenReady().then(() =&gt; {
+  ipcMain.handle('exec-command', async (event, cmd) =&gt; {
+    return new Promise((resolve, reject) =&gt; {
+      require('child_process').exec(cmd, (error, stdout, stderr) =&gt; {
+        if (error) {
+          console.error(`Error executing command &quot;${cmd}&quot;:`, error);
+          reject(error);
+        } else {
+          resolve(stdout.trim());
+        }
+      });
+    });
+  });
+
+  createWindow();
+});
+
+
+app.on('window-all-closed', function () {
+  if (process.platform !== 'darwin') app.quit()
+})
+</code></pre>
+<p><strong>Index.html</strong></p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;UTF-8&quot;&gt;
+  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+  &lt;title&gt;Electron RCE Demo&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;pre id=&quot;cmdResultContent&quot;&gt;&lt;/pre&gt;
+  &lt;script src=&quot;./renderer.js&quot;&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p><strong>renderer.js</strong></p>
+<pre><code class="language-javascript">const fileContent = document.getElementById('cmdResultContent');
+
+window.electronApi.invoke('exec-command', 'pwd').then((result) =&gt; {
+    fileContent.textContent = result || 'No cmd exec result available.'
+})
+</code></pre>
+<p><strong>preload.js</strong></p>
+<p>将 <code>ipcRenderer.invoke</code> 直接暴露到渲染进程的全局对象 <code>window</code> 下，允许渲染进程通过 <code>electronApi.invoke</code> 调用主进程的 IPC 方法。</p>
+<pre><code class="language-javascript">const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronApi', {
+  invoke: ipcRenderer.invoke,
+});
+</code></pre>
+<p>此时就算代码里只是执行 pwd，但可以通过渲染进程调用主进程的 IPC 方法，存在 XSS 漏洞时即可 RCE。</p>
+<figure data-type="image" tabindex="8"><img src="https://oxigeono.github.io/post-images/image-20250103164946903.png" alt="image-20250103164946903" loading="lazy"></figure>
+<h3 id="csp">CSP</h3>
+<p>CSP（内容安全策略）是应对 XSS 和数据注入攻击的一层保护措施。建议任何载入到 Electron 的站点都要开启。CSP 属于一种白名单机制，能够有效防止外部 JavaScript 执行。</p>
+<p><strong>检查方法</strong>：找到窗口加载的 html 文件，查看是否设置了 CSP 策略。</p>
+<pre><code class="language-html">&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;script-src 'self';&quot;/&gt;
+</code></pre>
+<h3 id="自定义协议">自定义协议</h3>
+<p>寻找 protocol.handle，关注自定义协议的实现是否安全。</p>
+<h4 id="不安全的实现-2">不安全的实现</h4>
+<p>image:// 存在任意文件读取漏洞，自定义协议的杀伤范围更大。即使开启 contextIsolation，渲染器进程仍然可以访问自定义协议。</p>
+<pre><code class="language-javascript">// image 协议注册
+protocol.handle(&quot;image&quot;, async (request) =&gt; {
+  try {
+    // 解析 URL，移除协议前缀
+    const url = decodeURIComponent(request.url.replace(/^image:\/\//, &quot;&quot;))
+    const filePath = path.normalize(url) // 标准化路径
+
+    // 检查文件是否存在
+    if (fs.existsSync(filePath)) {
+      return new Response(fs.readFileSync(filePath), {
+        headers: { &quot;Content-Type&quot;: &quot;image/png&quot; },
+      })
+    }
+</code></pre>
+<h5 id="攻击实践">攻击实践</h5>
+<p>用户只要点击恶意链接，在渲染进程执行 javascript 就会被盗取本地文件。<br>
+<img src="https://oxigeono.github.io/post-images/1736416812633.png" alt="" loading="lazy"></p>
+<h3 id="参考">参考</h3>
+<ul>
+<li>https://xz.aliyun.com/t/12822</li>
+<li>https://www.electronjs.org/docs/latest</li>
+<li>https://www.electronjs.org/docs/latest/tutorial/security</li>
+<li>https://mksben.l0.cm/2020/10/discord-desktop-rce.html</li>
+<li>https://github.com/Just-Hack-For-Fun/Electron-Security</li>
+</ul>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%9F%BA%E7%A1%80%E6%A6%82%E5%BF%B5">基础概念</a>
+<ul>
+<li><a href="#%E4%B8%BB%E8%BF%9B%E7%A8%8B">主进程</a></li>
+<li><a href="#%E6%B8%B2%E6%9F%93%E8%BF%9B%E7%A8%8B">渲染进程</a></li>
+<li><a href="#%E9%A2%84%E5%8A%A0%E8%BD%BD%E8%84%9A%E6%9C%AC">预加载脚本</a></li>
+</ul>
+</li>
+<li><a href="#electron-%E5%BA%94%E7%94%A8%E5%AE%89%E5%85%A8">Electron 应用安全</a>
+<ul>
+<li><a href="#%E8%A7%A3%E5%8C%85-asar-%E6%96%87%E4%BB%B6">解包 asar 文件</a></li>
+<li><a href="#%E8%BD%AF%E4%BB%B6%E4%BE%9B%E5%BA%94%E9%93%BE%E5%AE%89%E5%85%A8">软件供应链安全</a></li>
+<li><a href="#electron-%E7%89%88%E6%9C%AC">Electron 版本</a></li>
+<li><a href="#%E8%BF%9C%E7%A8%8B%E8%B0%83%E8%AF%95">远程调试</a></li>
+<li><a href="#%E5%AF%B9%E6%AF%94%E7%89%88%E6%9C%AC%E5%8F%91%E5%B8%83%E6%98%8E%E7%BB%86">对比版本发布明细</a></li>
+<li><a href="#%E9%87%8D%E8%A6%81%E9%85%8D%E7%BD%AE">重要配置</a></li>
+<li><a href="#nodeintegration">nodeIntegration</a></li>
+<li><a href="#contextisolation">contextIsolation</a>
+<ul>
+<li><a href="#%E6%BC%8F%E6%B4%9E%E6%A1%88%E4%BE%8B">漏洞案例</a></li>
+</ul>
+</li>
+<li><a href="#sandbox">sandbox</a></li>
+<li><a href="#websecurity">webSecurity</a></li>
+<li><a href="#fuse">fuse</a>
+<ul>
+<li><a href="#runasnode">runAsNode</a></li>
+<li><a href="#nodecliinspect">nodeCliInspect</a></li>
+<li><a href="#grantfileprotocolextraprivileges">grantFileProtocolExtraPrivileges</a></li>
+</ul>
+</li>
+<li><a href="#%E9%A2%84%E5%8A%A0%E8%BD%BD%E8%84%9A%E6%9C%AC-2">预加载脚本</a>
+<ul>
+<li><a href="#%E6%9C%AA%E5%BC%80%E5%90%AF-contextisolation-%E5%8F%8A-sandbox">未开启 contextIsolation 及 sandbox</a></li>
+<li><a href="#%E4%B8%8D%E5%AE%89%E5%85%A8%E7%9A%84%E5%AE%9E%E7%8E%B0">不安全的实现</a></li>
+<li><a href="#%E6%8E%A5%E5%8F%A3%E8%BF%87%E5%BA%A6%E6%9A%B4%E9%9C%B2">接口过度暴露</a></li>
+</ul>
+</li>
+<li><a href="#csp">CSP</a></li>
+<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E5%8D%8F%E8%AE%AE">自定义协议</a>
+<ul>
+<li><a href="#%E4%B8%8D%E5%AE%89%E5%85%A8%E7%9A%84%E5%AE%9E%E7%8E%B0-2">不安全的实现</a>
+<ul>
+<li><a href="#%E6%94%BB%E5%87%BB%E5%AE%9E%E8%B7%B5">攻击实践</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://oxigeono.github.io/post/2024/">
+              <h3 class="post-title">
+                2024
+              </h3>
+            </a>
+          </div>
+        
+
+        
+          
+            <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+<script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+
+<div id="gitalk-container"></div>
+
+<script>
+
+  var gitalk = new Gitalk({
+    clientID: 'Ov23lit5tNmd0CbT0iMM',
+    clientSecret: '28639186f036b497eafeb395f3948d416217fd4e',
+    repo: 'oxigeono.github.io',
+    owner: 'oxigeono',
+    admin: ['oxigeono'],
+    id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+    distractionFreeMode: false  // Facebook-like distraction free mode
+  })
+
+  gitalk.render('gitalk-container')
+
+</script>
+
+          
+
+          
+        
+
+        <div class="site-footer">
+  
+  <a class="rss" href="https://oxigeono.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
